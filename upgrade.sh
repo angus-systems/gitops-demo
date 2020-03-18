@@ -22,7 +22,7 @@ set -euo pipefail
 JK_VERSION=0.3.0
 FOOTLOOSE_VERSION=0.6.3
 IGNITE_VERSION=0.5.5
-WKSCTL_VERSION=0.8.1
+WKSCTL_VERSION=0.8.2-alpha.4
 
 config_backend() {
     sed -n -e 's/^backend: *\(.*\)/\1/p' config.yaml
@@ -144,46 +144,14 @@ if [ ! -f "${cluster_key}" ]; then
     ssh-keygen -q -t rsa -b 4096 -C firekube@footloose.mail -f ${cluster_key} -N ""
 fi
 
-log "Creating virtual machines"
-do_footloose create
-
-log "Creating Cluster API manifests"
+log "Upgrading ..."
 status="footloose-status.yaml"
 do_footloose status -o json > "${status}"
 jk generate -f config.yaml -f "${status}" setup.js
-
-log "Generating haproxy.cfg"
-jk generate -f config.yaml -f "${status}" haproxy_cfg.js
-
-log "Running external load-balancer"
-docker rm -f haproxy || true
-docker run --detach \
-  --name haproxy \
-  -v $PWD/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg \
-  haproxy
-
-log "Generating cluster.yaml"
-jk generate -f config.yaml -f "${status}" \
-  -p externalLoadBalancer=$(docker inspect haproxy --format="{{ .NetworkSettings.IPAddress }}") \
-  cluster_yaml.js
-
 rm -f "${status}"
 
-
-log "Updating container images and git parameters"
-wksctl init --git-url="$(git_http_url "$(git_remote_fetchurl "${git_remote}")")" --git-branch="$(git_current_branch)"
-
 log "Pushing initial cluster configuration"
-git add haproxy.cfg cluster.yaml config.yaml footloose.yaml machines.yaml flux.yaml wks-controller.yaml
+git add config.yaml footloose.yaml machines.yaml flux.yaml wks-controller.yaml
 
-git diff-index --quiet HEAD || git commit -m "Initial cluster configuration" || true
+git diff-index --quiet HEAD || git commit -m "Upgrading cluster configuration" || true
 git push "${git_remote}" HEAD || true
-
-log "Installing Kubernetes cluster"
-apply_args=(
-  "--git-url=$(git_http_url "$(git_remote_fetchurl "${git_remote}")")"
-  "--git-branch=$(git_current_branch)"
-)
-[ "${git_deploy_key}" ] && apply_args+=("${git_deploy_key}")
-wksctl -v apply "${apply_args[@]}"
-wksctl kubeconfig

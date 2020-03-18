@@ -47,7 +47,7 @@ const footloose = config => ({
       },
       portMappings: [{
         containerPort: 22,
-        hostPort: 2222,
+        hostPort: 32222,
       }, {
         containerPort: 6443,
         hostPort: 6443,
@@ -87,7 +87,7 @@ const Machine = ({ id, privateIP, sshPort, role, kubeVersion }) => ({
   spec: {
     versions: {
       kubelet: `${kubeVersion}`,
-      // controlPlane: `${kubeVersion}`
+      //controlPlane: `${kubeVersion}`
     },
     providerSpec: {
       value: {
